@@ -2,7 +2,6 @@ package org.jhipster.blog.web.rest;
 
 import org.jhipster.blog.domain.Entry;
 import org.jhipster.blog.repository.EntryRepository;
-import org.jhipster.blog.security.SecurityUtils;
 import org.jhipster.blog.web.rest.errors.BadRequestAlertException;
 
 import io.github.jhipster.web.util.HeaderUtil;
@@ -55,16 +54,12 @@ public class EntryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("/entries")
-    public ResponseEntity<?> createEntry(@Valid @RequestBody Entry entry) throws URISyntaxException {
+    public ResponseEntity<Entry> createEntry(@Valid @RequestBody Entry entry) throws URISyntaxException {
         log.debug("REST request to save Entry : {}", entry);
         if (entry.getId() != null) {
             throw new BadRequestAlertException("A new entry cannot already have an ID", ENTITY_NAME, "idexists");
         }
         Entry result = entryRepository.save(entry);
-        if (entry.getBlog() != null &&
-            !entry.getBlog().getUser().getLogin().equals(SecurityUtils.getCurrentUserLogin().orElse(""))) {
-            return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
-        }
         return ResponseEntity.created(new URI("/api/entries/" + result.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
             .body(result);
@@ -80,14 +75,10 @@ public class EntryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("/entries")
-    public ResponseEntity<?> updateEntry(@Valid @RequestBody Entry entry) throws URISyntaxException {
+    public ResponseEntity<Entry> updateEntry(@Valid @RequestBody Entry entry) throws URISyntaxException {
         log.debug("REST request to update Entry : {}", entry);
         if (entry.getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (entry.getBlog() != null &&
-            !entry.getBlog().getUser().getLogin().equals(SecurityUtils.getCurrentUserLogin().orElse(""))) {
-            return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
         }
         Entry result = entryRepository.save(entry);
         return ResponseEntity.ok()
@@ -107,7 +98,12 @@ public class EntryResource {
     @GetMapping("/entries")
     public ResponseEntity<List<Entry>> getAllEntries(Pageable pageable, @RequestParam MultiValueMap<String, String> queryParams, UriComponentsBuilder uriBuilder, @RequestParam(required = false, defaultValue = "false") boolean eagerload) {
         log.debug("REST request to get a page of Entries");
-        Page<Entry> page = entryRepository.findByBlogUserLoginOrderByDateDesc(SecurityUtils.getCurrentUserLogin().orElse(null), pageable);
+        Page<Entry> page;
+        if (eagerload) {
+            page = entryRepository.findAllWithEagerRelationships(pageable);
+        } else {
+            page = entryRepository.findAll(pageable);
+        }
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(uriBuilder.queryParams(queryParams), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
@@ -119,13 +115,9 @@ public class EntryResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the entry, or with status {@code 404 (Not Found)}.
      */
     @GetMapping("/entries/{id}")
-    public ResponseEntity<?> getEntry(@PathVariable Long id) {
+    public ResponseEntity<Entry> getEntry(@PathVariable Long id) {
         log.debug("REST request to get Entry : {}", id);
         Optional<Entry> entry = entryRepository.findOneWithEagerRelationships(id);
-        if (entry.isPresent() && entry.get().getBlog() != null &&
-            !entry.get().getBlog().getUser().getLogin().equals(SecurityUtils.getCurrentUserLogin().orElse(""))) {
-            return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
-        }
         return ResponseUtil.wrapOrNotFound(entry);
     }
 
@@ -136,13 +128,8 @@ public class EntryResource {
      * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
      */
     @DeleteMapping("/entries/{id}")
-    public ResponseEntity<?> deleteEntry(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteEntry(@PathVariable Long id) {
         log.debug("REST request to delete Entry : {}", id);
-        Optional<Entry> entry = entryRepository.findOneWithEagerRelationships(id);
-        if (entry.isPresent() && entry.get().getBlog() != null &&
-            !entry.get().getBlog().getUser().getLogin().equals(SecurityUtils.getCurrentUserLogin().orElse(""))) {
-            return new ResponseEntity<>("Unauthorized", HttpStatus.UNAUTHORIZED);
-        }
         entryRepository.deleteById(id);
         return ResponseEntity.noContent().headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString())).build();
     }
